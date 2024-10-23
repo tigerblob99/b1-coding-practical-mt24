@@ -46,7 +46,6 @@ class Trajectory:
         
     def plot(self):
         plt.plot(self.position[:, 0], self.position[:, 1])
-        plt.show()
 
     def plot_completed_mission(self, mission: Mission):
         x_values = np.arange(len(mission.reference))
@@ -93,9 +92,9 @@ class ClosedLoop:
     def __init__(self, plant: Submarine, controller):
         self.plant = plant
         self.controller = controller
+        self.dt = plant.dt  # Store the time step
 
-    def simulate(self,  mission: Mission, disturbances: np.ndarray) -> Trajectory:
-
+    def simulate(self, mission: Mission, disturbances: np.ndarray) -> Trajectory:
         T = len(mission.reference)
         if len(disturbances) < T:
             raise ValueError("Disturbances must be at least as long as mission duration")
@@ -108,6 +107,7 @@ class ClosedLoop:
             positions[t] = self.plant.get_position()
             observation_t = self.plant.get_depth()
             # Call your controller here
+            actions[t] = self.controller.compute(mission.reference[t], observation_t, self.dt)
             self.plant.transition(actions[t], disturbances[t])
 
         return Trajectory(positions)
@@ -115,3 +115,17 @@ class ClosedLoop:
     def simulate_with_random_disturbances(self, mission: Mission, variance: float = 0.5) -> Trajectory:
         disturbances = np.random.normal(0, variance, len(mission.reference))
         return self.simulate(mission, disturbances)
+    
+    def calculate_total_error(self, mission: Mission) -> float:
+        T = len(mission.reference)
+        total_error = 0.0
+        self.plant.reset_state()
+
+        for t in range(T):
+            observation_t = self.plant.get_depth()
+            error_t = mission.reference[t] - observation_t
+            total_error += abs(error_t)
+            action_t = self.controller.compute(mission.reference[t], observation_t, self.dt)
+            self.plant.transition(action_t, 0)  # Assuming no disturbance for error calculation
+
+        return total_error
