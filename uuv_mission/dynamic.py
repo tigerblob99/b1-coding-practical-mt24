@@ -7,34 +7,39 @@ import pandas as pd
 
 class Submarine:
     def __init__(self):
-
+        # Initialize submarine parameters
         self.mass = 1
         self.drag = 0.1
         self.actuator_gain = 1
 
         self.dt = 1 # Time step for discrete time simulation
 
+        # Initial position and velocity
         self.pos_x = 0
         self.pos_y = 0
         self.vel_x = 1 # Constant velocity in x direction
         self.vel_y = 0
 
-
     def transition(self, action: float, disturbance: float):
+        # Update position based on current velocity
         self.pos_x += self.vel_x * self.dt
         self.pos_y += self.vel_y * self.dt
 
+        # Calculate force and acceleration in y direction
         force_y = -self.drag * self.vel_y + self.actuator_gain * (action + disturbance)
         acc_y = force_y / self.mass
         self.vel_y += acc_y * self.dt
 
     def get_depth(self) -> float:
+        # Return current depth (y position)
         return self.pos_y
     
     def get_position(self) -> tuple:
+        # Return current position (x, y)
         return self.pos_x, self.pos_y
     
     def reset_state(self):
+        # Reset position and velocity to initial state
         self.pos_x = 0
         self.pos_y = 0
         self.vel_x = 1
@@ -45,9 +50,11 @@ class Trajectory:
         self.position = position  
         
     def plot(self):
+        # Plot the trajectory
         plt.plot(self.position[:, 0], self.position[:, 1])
 
     def plot_completed_mission(self, mission: Mission):
+        # Plot the completed mission with cave limits and reference trajectory
         x_values = np.arange(len(mission.reference))
         min_depth = np.min(mission.cave_depth)
         max_height = np.max(mission.cave_height)
@@ -70,6 +77,7 @@ class Mission:
 
     @classmethod
     def random_mission(cls, duration: int, scale: float):
+        # Generate a random mission with given duration and scale
         (reference, cave_height, cave_depth) = generate_reference_and_limits(duration, scale)
         return cls(reference, cave_height, cave_depth)
 
@@ -86,8 +94,6 @@ class Mission:
         # Return an instance of Mission with the extracted data
         return cls(reference, cave_height, cave_depth)
     
-
-
 class ClosedLoop:
     def __init__(self, plant: Submarine, controller):
         self.plant = plant
@@ -106,13 +112,15 @@ class ClosedLoop:
         for t in range(T):
             positions[t] = self.plant.get_position()
             observation_t = self.plant.get_depth()
-            # Call your controller here
+            # Compute the control action
             actions[t] = self.controller.compute(mission.reference[t], observation_t, self.dt)
+            # Update the plant state
             self.plant.transition(actions[t], disturbances[t])
 
         return Trajectory(positions)
         
     def simulate_with_random_disturbances(self, mission: Mission, variance: float = 0.5) -> Trajectory:
+        # Generate random disturbances with given variance
         disturbances = np.random.normal(0, variance, len(mission.reference))
         return self.simulate(mission, disturbances)
     
@@ -126,6 +134,7 @@ class ClosedLoop:
             error_t = mission.reference[t] - observation_t
             total_error += abs(error_t)
             action_t = self.controller.compute(mission.reference[t], observation_t, self.dt)
-            self.plant.transition(action_t, 0)  # Assuming no disturbance for error calculation
+            # Update the plant state assuming no disturbance for error calculation
+            self.plant.transition(action_t, 0)
 
         return total_error
